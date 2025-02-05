@@ -1,0 +1,153 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+   provider = "prisma-client-js"
+}
+
+datasource db {
+   provider = "postgresql"
+   url      = env("DATABASE_URL")
+}
+
+////////////////////////////////  Users ///////////////////////////////////
+model Users {
+   id          Int           @id @default(autoincrement())
+   firstName   String
+   lastName    String
+   email       String        @unique
+   role        UserRole      @default(employee)
+   status      UserType      @default(permanent)
+   designation String?
+   department  String?
+   joiningDate DateTime      @default(now())
+   bio         String?
+   gender      String?
+   picture     String?
+   location    String?
+   isActive    Boolean       @default(true)
+   userAuth    UserAuth?
+   application Application[]
+   formatId    Int?
+   format      LeaveFormat?  @relation(fields: [formatId], references: [id])
+   userLeave   UserLeave[]
+   createdAt   DateTime      @default(now())
+   updatedAt   DateTime      @default(now()) @updatedAt
+}
+
+////////////////////// UserLeaves //////////////////
+
+model UserLeave {
+   id          Int        @id @default(autoincrement())
+   userId      Int
+   user        Users      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveTypeId Int?
+   leaveType   LeaveType? @relation(fields: [leaveTypeId], references: [id])
+   totalLeaves Int        @default(0)
+   createdAt   DateTime   @default(now())
+   updatedAt   DateTime   @default(now()) @updatedAt
+
+   @@unique([userId, leaveTypeId])
+}
+
+model UserAuth {
+   id        Int      @id @default(autoincrement())
+   userId    Int      @unique
+   user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   method    String
+   password  String
+   createdAt DateTime @default(now())
+   updatedAt DateTime @default(now()) @updatedAt
+}
+
+//////////////////////   Leave //////////////////
+model LeaveFormat {
+   id                Int                 @id @default(autoincrement())
+   name              String              @unique
+   description       String?
+   leaveRelationship LeaveRelationship[]
+   userId            Users[]
+   createdAt         DateTime            @default(now())
+   updatedAt         DateTime            @default(now()) @updatedAt
+}
+
+model LeaveType {
+   id                Int                 @id @default(autoincrement())
+   name              String              @unique
+   description       String?
+   frequency         LeaveFrequency      @default(yearly)
+   addon             Boolean             @default(true)
+   for               LeaveFor            @default(all)
+   leaveRelationship LeaveRelationship[]
+   userLeave         UserLeave[]
+   createdAt         DateTime            @default(now())
+   updatedAt         DateTime            @default(now()) @updatedAt
+}
+
+model LeaveRelationship {
+   id           Int         @id @default(autoincrement())
+   formatId     Int
+   format       LeaveFormat @relation(fields: [formatId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   typeId       Int
+   type         LeaveType   @relation(fields: [typeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveGiven   Float       @default(0.00)
+   quarterOne   Float       @default(0.00)
+   quarterTwo   Float       @default(0.00)
+   quarterThree Float       @default(0.00)
+   quarterFour  Float       @default(0.00)
+   createdAt    DateTime    @default(now())
+   updatedAt    DateTime    @default(now()) @updatedAt
+
+   @@unique([formatId, typeId])
+}
+
+////////////////////// Application //////////////////
+
+model Application {
+   id        Int               @id @default(autoincrement())
+   userId    Int
+   user      Users             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   reason    String
+   comment   String
+   status    ApplicationStatus @default(pending)
+   leaves    Json
+   createdAt DateTime          @default(now())
+   updatedAt DateTime          @default(now()) @updatedAt
+}
+
+/////////////////////////////////////////////
+
+enum UserType {
+   probationary
+   permanent
+   noticePeriod
+}
+
+enum UserRole {
+   admin
+   humanResources
+   employee
+}
+
+enum LeaveFrequency {
+   daily
+   weekly
+   monthly
+   yearly
+}
+
+enum ApplicationStatus {
+   pending
+   approved
+   rejected
+}
+
+enum LeaveFor {
+   all
+   male
+   female
+   other
+}
