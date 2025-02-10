@@ -4,7 +4,7 @@ import prisma from '../config/prisma.js';
 import { adminAuthentication } from '../middleware/index.js';
 const adminUserRouter = Router();
 
-adminUserRouter.use(adminAuthentication())
+// adminUserRouter.use(adminAuthentication())
 adminUserRouter.post('/create-employee', async (req, res) => {
    try {
       const body = req.body

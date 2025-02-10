@@ -120,7 +120,6 @@ authorizationRouter.get('/check-token', async (req, res) => {
 
       return res.status(200).send({ success: true, login: true, decoded })
    } catch (error) {
-      console.error(error)
       return res.status(500).send({ success: false, message: "Failed to authenticate token" })
    }
 })

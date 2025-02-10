@@ -15,42 +15,28 @@ datasource db {
 
 ////////////////////////////////  Users ///////////////////////////////////
 model Users {
-   id          Int           @id @default(autoincrement())
-   firstName   String
-   lastName    String
-   email       String        @unique
-   role        UserRole      @default(employee)
-   status      UserType      @default(permanent)
-   designation String?
-   department  String?
-   joiningDate DateTime      @default(now())
-   bio         String?
-   gender      String?
-   picture     String?
-   location    String?
-   isActive    Boolean       @default(true)
-   userAuth    UserAuth?
-   application Application[]
-   formatId    Int?
-   format      LeaveFormat?  @relation(fields: [formatId], references: [id])
-   userLeave   UserLeave[]
-   createdAt   DateTime      @default(now())
-   updatedAt   DateTime      @default(now()) @updatedAt
-}
-
-////////////////////// UserLeaves //////////////////
-
-model UserLeave {
-   id          Int        @id @default(autoincrement())
-   userId      Int
-   user        Users      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-   leaveTypeId Int?
-   leaveType   LeaveType? @relation(fields: [leaveTypeId], references: [id])
-   totalLeaves Int        @default(0)
-   createdAt   DateTime   @default(now())
-   updatedAt   DateTime   @default(now()) @updatedAt
-
-   @@unique([userId, leaveTypeId])
+   id                       Int                        @id @default(autoincrement())
+   firstName                String
+   lastName                 String
+   email                    String                     @unique
+   role                     UserRole                   @default(employee)
+   status                   UserType                   @default(permanent)
+   designation              String?
+   department               String?
+   joiningDate              DateTime                   @default(now())
+   bio                      String?
+   gender                   String?
+   picture                  String?
+   location                 String?
+   isActive                 Boolean                    @default(true)
+   userAuth                 UserAuth?
+   application              LeaveApplication[]
+   formatId                 Int?
+   format                   LeaveFormat?               @relation(fields: [formatId], references: [id])
+   userLeave                UserLeave[]
+   leaveApplicationCalender LeaveApplicationCalender[]
+   createdAt                DateTime                   @default(now())
+   updatedAt                DateTime                   @default(now()) @updatedAt
 }
 
 model UserAuth {
@@ -61,6 +47,22 @@ model UserAuth {
    password  String
    createdAt DateTime @default(now())
    updatedAt DateTime @default(now()) @updatedAt
+}
+
+////////////////////// UserLeaves //////////////////
+
+model UserLeave {
+   id            Int        @id @default(autoincrement())
+   userId        Int
+   user          Users      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveTypeId   Int?
+   leaveType     LeaveType? @relation(fields: [leaveTypeId], references: [id])
+   totalLeaves   Int        @default(0)
+   pendingLeaves Int        @default(0)
+   createdAt     DateTime   @default(now())
+   updatedAt     DateTime   @default(now()) @updatedAt
+
+   @@unique([userId, leaveTypeId])
 }
 
 //////////////////////   Leave //////////////////
@@ -75,16 +77,18 @@ model LeaveFormat {
 }
 
 model LeaveType {
-   id                Int                 @id @default(autoincrement())
-   name              String              @unique
-   description       String?
-   frequency         LeaveFrequency      @default(yearly)
-   addon             Boolean             @default(true)
-   for               LeaveFor            @default(all)
-   leaveRelationship LeaveRelationship[]
-   userLeave         UserLeave[]
-   createdAt         DateTime            @default(now())
-   updatedAt         DateTime            @default(now()) @updatedAt
+   id                       Int                        @id @default(autoincrement())
+   name                     String                     @unique
+   description              String?
+   frequency                LeaveFrequency             @default(yearly)
+   addon                    Boolean                    @default(true)
+   for                      LeaveFor                   @default(all)
+   leaveRelationship        LeaveRelationship[]
+   userLeave                UserLeave[]
+   leaveApplicationCalender LeaveApplicationCalender[]
+   createdAt                DateTime                   @default(now())
+   updatedAt                DateTime                   @default(now()) @updatedAt
+   LeaveApplicationDetails  LeaveApplicationDetails[]
 }
 
 model LeaveRelationship {
@@ -106,16 +110,45 @@ model LeaveRelationship {
 
 ////////////////////// Application //////////////////
 
-model Application {
-   id        Int               @id @default(autoincrement())
-   userId    Int
-   user      Users             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-   reason    String
-   comment   String
-   status    ApplicationStatus @default(pending)
-   leaves    Json
-   createdAt DateTime          @default(now())
-   updatedAt DateTime          @default(now()) @updatedAt
+model LeaveApplication {
+   id                       Int                        @id @default(autoincrement())
+   userId                   Int
+   user                     Users                      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   subject                  String
+   reason                   String
+   comment                  String                     @default("")
+   status                   ApplicationStatus          @default(pending)
+   leaveApplicationDetails  LeaveApplicationDetails[]
+   leaveApplicationCalender LeaveApplicationCalender[]
+   createdAt                DateTime                   @default(now())
+   updatedAt                DateTime                   @default(now()) @updatedAt
+
+   @@unique([id, userId])
+}
+
+model LeaveApplicationDetails {
+   id            Int              @id @default(autoincrement())
+   applicationId Int
+   application   LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveTypeId   Int
+   leaveType     LeaveType        @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveCount    Int
+   leaveDates    Json
+   createdAt     DateTime         @default(now())
+}
+
+model LeaveApplicationCalender {
+   id            Int               @id @default(autoincrement())
+   userId        Int
+   user          Users             @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveTypeId   Int
+   leaveType     LeaveType         @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   applicationId Int
+   application   LeaveApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   status        ApplicationStatus @default(pending)
+   leaveDate     DateTime
+   createdAt     DateTime          @default(now())
+   updatedAt     DateTime          @default(now()) @updatedAt
 }
 
 /////////////////////////////////////////////
@@ -143,6 +176,7 @@ enum ApplicationStatus {
    pending
    approved
    rejected
+   cancelled
 }
 
 enum LeaveFor {
