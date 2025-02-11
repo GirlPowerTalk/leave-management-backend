@@ -185,3 +185,13 @@ enum LeaveFor {
    female
    other
 }
+
+/////////////////////////   Settings //////////////////////////
+
+// model Settings {
+//    id        Int      @id @default(autoincrement())
+//    key       String   @unique
+//    value     String
+//    createdAt DateTime @default(now())
+//    updatedAt DateTime @default(now()) @updatedAt
+// }

@@ -13,6 +13,7 @@ import leaveTypeRouter from "./controllers/leaveType.js"
 import userRouter from "./controllers/user.js"
 import userLeaveRouter from "./controllers/user-leave-controller.js"
 import adminLeaveRouter from "./controllers/admin-leave-controller.js"
+import { redis } from "./config/redis.js"
 
 const app = express()
 dotenv.config()
@@ -21,6 +22,10 @@ dotenv.config()
 process.on("uncaughtException", err => {
    console.log(`Error: ${err.message}`)
    process.exit(1)
+})
+// redis
+redis.on("connect", () => {
+   console.log("Connected to Redis")
 })
 // cors origin define
 app.use(

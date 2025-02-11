@@ -16,9 +16,7 @@ userLeaveRouter.use(userAuthentication())
 userLeaveRouter.post('/create-leave', async (req, res) => {
    try {
       const user = req.user
-      console.log('user already', user)
       const body = req.body
-      console.log('body', body)
 
       const transformedLeaves = body.leaves.flatMap(({ leaveTypeId, dates }) =>
          dates.map(d => ({ leaveDate: d, leaveTypeId, userId: +user.id }))
