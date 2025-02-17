@@ -184,8 +184,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             };
             transporter.sendMail(mailOptions);
          }
-      }
-      if (body.status === 'rejected') {
+      } else {
          const transaction = await prisma.$transaction(async (prisma) => {
             // update status
             const updateLeave = await prisma.leaveApplication.update({
@@ -204,7 +203,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                }
             })
             // update pending leaves
-            await Promise.all(
+            await Promise.all([
                // Only run if applicationDetails.userLeave has data
                ...(applicationDetails?.leaveApplicationDetails?.length ? applicationDetails.leaveApplicationDetails.map(leave =>
                   prisma.userLeave.update({
@@ -221,7 +220,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      }
                   })
                ) : [])
-            );
+            ]);
             return { updateLeave, updateCalender }
          })
          if (transaction.updateLeave) {
