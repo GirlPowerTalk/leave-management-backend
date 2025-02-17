@@ -10,14 +10,39 @@ userRouter.put("/update-profile", async (req, res) => {
    try {
       const body = req.body
       const userId = req.user.id
-      await prisma.users.update({
+      const updateProfile = await prisma.users.update({
          where: { id: userId },
-         data: body
+         data: {
+            firstName: body.firstName,
+            lastName: body.lastName,
+            designation: body.designation,
+            department: body.department,
+            ...(body.meta && typeof body.meta === "object" && Object.keys(body.meta).length > 0 && {
+               userMeta: {
+                  upsert: Object.entries(body.meta).map(([key, value]) => ({
+                     where: {
+                        userId_key: {
+                           userId: +userId,
+                           key: key
+                        }
+                     },
+                     create: {
+                        key,
+                        value: value,
+                     },
+                     update: {
+                        value: value,
+                     }
+                  }))
+               }
+            })
+         }
       })
-      res.status(200).json({ success: true, message: "Profile updated successfully" })
+      if (!updateProfile) return res.status(409).json({ success: false, message: "Profile not updated" })
+      return res.status(200).json({ success: true, message: "Profile updated successfully" })
    } catch (error) {
       console.log(error)
-      res.status(500).json({ message: "Internal Server Error" })
+      return res.status(500).json({ message: "Internal Server Error" })
    }
 })
 userRouter.get("/profile", async (req, res) => {
@@ -32,7 +57,7 @@ userRouter.get("/profile", async (req, res) => {
       res.status(500).json({ message: "Internal Server Error" })
    }
 })
-userRouter.get("/profile-with-leaves", async (req, res) => {
+userRouter.get("/profile-leaves-meta", async (req, res) => {
    try {
       const userId = req.user.id
       const user = await prisma.users.findUnique({
@@ -40,7 +65,23 @@ userRouter.get("/profile-with-leaves", async (req, res) => {
          include: {
             userLeave: {
                include: { leaveType: true }
-            }
+            },
+            userMeta: true
+         },
+      })
+      res.status(200).json({ success: true, user })
+   } catch (error) {
+      console.log(error)
+      res.status(500).json({ message: "Internal Server Error" })
+   }
+})
+userRouter.get("/profile-data", async (req, res) => {
+   try {
+      const userId = req.user.id
+      const user = await prisma.users.findUnique({
+         where: { id: userId },
+         include: {
+            userMeta: true
          },
       })
       res.status(200).json({ success: true, user })

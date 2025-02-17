@@ -20,23 +20,35 @@ model Users {
    lastName                 String
    email                    String                     @unique
    role                     UserRole                   @default(employee)
-   status                   UserType                   @default(permanent)
+   employeeType             UserType                   @default(permanent)
+   isActive                 Boolean                    @default(true)
    designation              String?
    department               String?
-   joiningDate              DateTime                   @default(now())
-   bio                      String?
-   gender                   String?
    picture                  String?
-   location                 String?
-   isActive                 Boolean                    @default(true)
-   userAuth                 UserAuth?
-   application              LeaveApplication[]
+   reportingHrId            Int?
+   reportingHr              Users?                     @relation("hrRelation", fields: [reportingHrId], references: [id])
+   employees                Users[]                    @relation("hrRelation")
    formatId                 Int?
    format                   LeaveFormat?               @relation(fields: [formatId], references: [id])
    userLeave                UserLeave[]
+   leaveApplication         LeaveApplication[]
    leaveApplicationCalender LeaveApplicationCalender[]
+   userMeta                 UserMeta[]
+   userAuth                 UserAuth?
    createdAt                DateTime                   @default(now())
    updatedAt                DateTime                   @default(now()) @updatedAt
+
+   @@index([id, email])
+}
+
+model UserMeta {
+   id     Int    @id @default(autoincrement())
+   userId Int
+   user   Users  @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   key    String
+   value  String
+
+   @@unique([userId, key])
 }
 
 model UserAuth {
@@ -195,3 +207,14 @@ enum LeaveFor {
 //    createdAt DateTime @default(now())
 //    updatedAt DateTime @default(now()) @updatedAt
 // }
+
+model Holidays {
+   id          Int      @id @default(autoincrement())
+   name        String   @unique
+   date        DateTime
+   year        Int?
+   description String?
+   festive     Boolean  @default(false)
+   createdAt   DateTime @default(now())
+   updatedAt   DateTime @default(now()) @updatedAt
+}

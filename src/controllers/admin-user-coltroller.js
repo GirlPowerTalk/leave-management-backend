@@ -10,23 +10,16 @@ adminUserRouter.post('/create-employee', async (req, res) => {
       const body = req.body
       console.log(body)
       const checkEmail = await prisma.users.findUnique({
-         where: {
-            email: body.email,
-         }
+         where: { email: body.email }
       })
-      if (checkEmail) {
-         return res.status(409).json({ success: false, message: 'Email already exists' })
-      }
-      //
-      const specificDate = new Date(body?.joiningDate);
-      const month = specificDate.getMonth() + 1;
-      // Use integer division to calculate the quarter
-      const quarter = Math.ceil(month / 3);
+      if (checkEmail) return res.status(409).json({ success: false, message: 'Email already exists' })
+      // get the employee join month
+      const joinMonth = new Date(body?.joiningDate).getMonth() + 1;
       // get all leave types
       var leavesList = []
-      if (body.type) {
+      if (body.formatId) {
          const leaveTypes = await prisma.leaveFormat.findUnique({
-            where: { id: +body.type },
+            where: { id: +body.formatId },
             select: {
                leaveRelationship: {
                   include: {
@@ -45,17 +38,17 @@ adminUserRouter.post('/create-employee', async (req, res) => {
             let value = 0;
             const frequency = item.type.frequency
             if (frequency === 'yearly') {
-               if (quarter === 1) {
-                  value = item.quarterOne;  // Should be quarterOne for Q1
-               } else if (quarter === 2) {
-                  value = item.quarterTwo;  // Should be quarterTwo for Q2
-               } else if (quarter === 3) {
-                  value = item.quarterThree;  // Should be quarterThree for Q3
-               } else if (quarter === 4) {
-                  value = item.quarterFour;  // Should be quarterFour for Q4
+               if (joinMonth >= 4 && joinMonth <= 6) {
+                  value = item.quarterOne;
+               } else if (joinMonth >= 7 && joinMonth <= 9) {
+                  value = item.quarterTwo;
+               } else if (joinMonth >= 10 && joinMonth <= 12) {
+                  value = item.quarterThree;
+               } else {
+                  value = item.quarterFour;
                }
             } else {
-               value = item.quarterOne;
+               value = item.leaveGiven;
             }
             return { ...item.type, value };
          });
@@ -66,19 +59,31 @@ adminUserRouter.post('/create-employee', async (req, res) => {
             lastName: body.lastName,
             email: body.email,
             role: body.role,
-            status: body.status,
-            gender: body.gender,
-            formatId: body.type,
-            joiningData: body.joiningData,
-            userLeave: {
-               create: leavesList.map((item) => ({
-                  leaveType: { connect: { id: item?.id } },
-                  totalLeaves: item.value
-               })),
-            }
-         }
-      })
+            employeeType: body.employeeType,
+            reportingHrId: body.reportingHrId || null,
+            formatId: body.formatId || null,
+            ...(Array.isArray(leavesList) && leavesList.length > 0 && {
+               userLeave: {
+                  create: leavesList.map((item) => ({
+                     leaveType: { connect: { id: item?.id } },
+                     totalLeaves: item.value,
+                  })),
+               },
+            }),
+            ...(body.meta && typeof body.meta === "object" && Object.keys(body.meta).length > 0 && {
+               userMeta: {
+                  create: Object.entries(body.meta).map(([key, value]) => ({
+                     key,
+                     value: value
+                  })),
+               },
+            }),
+         },
+      });
+
+
       if (!createEmployee) return res.status(409).json({ success: false, message: 'Error creating employee' })
+      console.log('new employee =>', createEmployee)
       return res.status(200).json({ success: true, message: 'Employee create successfully' })
    } catch (error) {
       console.log(error)
@@ -99,10 +104,37 @@ adminUserRouter.put("/update-employee/:id", async (req, res) => {
       if (checkEmail) return res.status(409).json({ success: false, message: "Email already exists" })
       const employee = await prisma.users.update({
          where: { id: parseInt(req.params.id) },
-         data: body
+         data: {
+            firstName: body.firstName,
+            lastName: body.lastName,
+            email: body.email,
+            role: body.role,
+            employeeType: body.employeeType,
+            reportingHrId: body.reportingHrId || null,
+            formatId: body.formatId || null,
+            ...(body.meta && typeof body.meta === "object" && Object.keys(body.meta).length > 0 && {
+               userMeta: {
+                  upsert: Object.entries(body.meta).map(([key, value]) => ({
+                     where: {
+                        userId_key: {
+                           userId: +userId,
+                           key: key
+                        }
+                     },
+                     create: {
+                        key,
+                        value: value,
+                     },
+                     update: {
+                        value: value,
+                     }
+                  }))
+               }
+            })
+         }
       })
       if (!employee) {
-         return res.status(409).json({ success: false, message: 'Employee not found' })
+         return res.status(409).json({ success: false, message: 'Employee not update' })
       }
       return res.status(200).json({ success: true, message: 'Employee updated successfully' })
    } catch (error) {
@@ -154,6 +186,7 @@ adminUserRouter.get("/read-employee/:id", async (req, res) => {
                   leaveType: true
                }
             },
+            userMeta: true
          }
       })
       if (!employee) {
@@ -220,6 +253,23 @@ adminUserRouter.get('/all-employees', async (req, res) => {
       })
       const total = await prisma.users.count({ where: conditions })
       return res.status(200).json({ success: true, employees, total })
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, error })
+   }
+})
+adminUserRouter.get("/hr-list", async (req, res) => {
+   try {
+      const hrList = await prisma.users.findMany({
+         where: { NOT: { role: "employee" } },
+         select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            role: true
+         }
+      })
+      return res.json({ success: true, hrList })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, error })

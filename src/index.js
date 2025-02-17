@@ -5,7 +5,6 @@ import cookieParser from "cookie-parser"
 import bodyParser from "body-parser"
 import dotenv from "dotenv"
 import http from 'http'
-import adminUserRouter from "./controllers/adminUser.js"
 import authorizationRouter from "./controllers/authorization.js"
 import leaveFormatRouter from "./controllers/leaveFormat.js"
 import { jobStart } from "./config/scheduled.js"
@@ -14,6 +13,8 @@ import userRouter from "./controllers/user.js"
 import userLeaveRouter from "./controllers/user-leave-controller.js"
 import adminLeaveRouter from "./controllers/admin-leave-controller.js"
 import { redis } from "./config/redis.js"
+import holidayRouter from "./controllers/holiday-controller.js"
+import adminUserRouter from "./controllers/admin-user-coltroller.js"
 
 const app = express()
 dotenv.config()
@@ -56,6 +57,8 @@ app.use('/api/admin/leave-type', leaveTypeRouter)
 app.use("/api/employee/leave-application", userLeaveRouter)
 app.use("/api/admin/leave-application", adminLeaveRouter)
 app.use("/api/user", userRouter)
+// 
+app.use('/api/holiday', holidayRouter)
 
 server.listen(process.env.PORT || 8090, () => {
    console.log(`Port ${process.env.PORT || 8090}`);
