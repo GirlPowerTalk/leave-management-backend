@@ -33,6 +33,8 @@ model Users {
    userLeave                UserLeave[]
    leaveApplication         LeaveApplication[]
    leaveApplicationCalender LeaveApplicationCalender[]
+   workFormHomeApplication  WorkFormHomeApplication[]
+   wfhApplicationCalender   WfhApplicationCalender[]
    userMeta                 UserMeta[]
    userAuth                 UserAuth?
    createdAt                DateTime                   @default(now())
@@ -91,16 +93,18 @@ model LeaveFormat {
 model LeaveType {
    id                       Int                        @id @default(autoincrement())
    name                     String                     @unique
+   code                     String                     @unique
    description              String?
    frequency                LeaveFrequency             @default(yearly)
    addon                    Boolean                    @default(true)
    for                      LeaveFor                   @default(all)
    leaveRelationship        LeaveRelationship[]
    userLeave                UserLeave[]
+   leaveApplicationDetails  LeaveApplicationDetails[]
    leaveApplicationCalender LeaveApplicationCalender[]
+   WfhApplicationCalender   WfhApplicationCalender[]
    createdAt                DateTime                   @default(now())
    updatedAt                DateTime                   @default(now()) @updatedAt
-   LeaveApplicationDetails  LeaveApplicationDetails[]
 }
 
 model LeaveRelationship {
@@ -161,6 +165,40 @@ model LeaveApplicationCalender {
    leaveDate     DateTime
    createdAt     DateTime          @default(now())
    updatedAt     DateTime          @default(now()) @updatedAt
+}
+
+// /////////////////    Work Form Application   //////////////
+
+model WorkFormHomeApplication {
+   id                     Int                      @id @default(autoincrement())
+   userId                 Int
+   user                   Users                    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   subject                String
+   reason                 String
+   wfhDetails             Json
+   comment                String                   @default("")
+   status                 ApplicationStatus        @default(pending)
+   wfhApplicationCalender WfhApplicationCalender[]
+   // leaveApplicationDetails  LeaveApplicationDetails[]
+   // leaveApplicationCalender LeaveApplicationCalender[]
+   createdAt              DateTime                 @default(now())
+   updatedAt              DateTime                 @default(now()) @updatedAt
+
+   @@unique([id, userId])
+}
+
+model WfhApplicationCalender {
+   id            Int                     @id @default(autoincrement())
+   userId        Int
+   user          Users                   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   leaveTypeId   Int
+   leaveType     LeaveType               @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   applicationId Int
+   application   WorkFormHomeApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+   status        ApplicationStatus       @default(pending)
+   leaveDate     DateTime
+   createdAt     DateTime                @default(now())
+   updatedAt     DateTime                @default(now()) @updatedAt
 }
 
 /////////////////////////////////////////////
