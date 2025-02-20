@@ -29,7 +29,8 @@ adminLeaveRouter.get("/applications", async (req, res) => {
             createdAt: "desc"
          }
       })
-      return res.status(200).json({ success: true, applications })
+      const total = await prisma.leaveApplication.count()
+      return res.status(200).json({ success: true, applications, total })
    } catch (error) {
       console.error(error)
       return res.status(500).json({ message: "Failed to get leave applications" })
@@ -67,6 +68,62 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
             },
          }
       })
+
+      // function getLeaveDateRange(leaveApplicationDetails) {
+      //    // Extract all leave dates
+      //    let allLeaveDates = leaveApplicationDetails.flatMap(detail => detail.leaveDates);
+      //    // Convert to Date objects and sort them
+      //    allLeaveDates = allLeaveDates.map(date => new Date(date)).sort((a, b) => a - b);
+
+      //    return {
+      //       firstLeaveDate: allLeaveDates[0]?.toISOString().split('T')[0], // Format: YYYY-MM-DD
+      //       lastLeaveDate: allLeaveDates[allLeaveDates.length - 1]?.toISOString().split('T')[0]
+      //    };
+      // }
+      // const dd = getLeaveDateRange(application?.leaveApplicationDetails)
+
+      // const anotherApplications = await prisma.leaveApplicationCalender.findMany({
+      //    where: {
+      //       leaveDate: {
+      //          gte: new Date(dd.firstLeaveDate), // Greater than or equal to firstLeaveDate
+      //          lte: new Date(dd.lastLeaveDate)   // Less than or equal to lastLeaveDate
+      //       }
+      //    },
+      //    include: {
+      //       user: {
+      //          select: {
+      //             id: true,
+      //             firstName: true,
+      //             lastName: true,
+      //             department: true
+      //          }
+      //       },           // Include user details
+      //       leaveType: {
+      //          select: {
+      //             id: true,
+      //             name: true
+      //          }
+      //       },      // Include leave type details
+      //    }
+      // });
+
+      // // Group data manually by date
+      // const groupedData = anotherApplications.reduce((acc, record) => {
+      //    const dateKey = record.leaveDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+      //    if (!acc[dateKey]) {
+      //       acc[dateKey] = [];
+      //    }
+      //    acc[dateKey].push({
+      //       applicationId: record.applicationId,
+      //       userId: record.user.id,
+      //       userName: record.user.firstName + ' ' + record.user.lastName,
+      //       userDepartment: record.user.department,
+      //       leaveType: record.leaveType.name,
+      //       status: record.status
+      //    });
+      //    return acc;
+      // }, {});
+
       return res.status(200).json({ success: true, application })
    } catch (error) {
       console.error(error)
@@ -243,3 +300,6 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
    }
 })
 export default adminLeaveRouter
+
+
+

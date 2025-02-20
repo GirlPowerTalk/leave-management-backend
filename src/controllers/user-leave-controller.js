@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
    auth: {
       user: process.env.CENTRAL_EMAIL_ADDRESS,
       pass: process.env.CENTRAL_EMAIL_PASSWORD,
-   },
+   }
 });
 
 const userLeaveRouter = Router();
@@ -184,6 +184,147 @@ userLeaveRouter.get("/read-application/:id", async (req, res) => {
       res.status(500).json({ success: false, message: 'Error retrieving application', error })
    }
 })
+
+// WFH Application
+
+userLeaveRouter.post("/create-wfh", async (req, res) => {
+   try {
+      const user = req.user
+      const body = req.body
+
+      const findWfh = await prisma.leaveType.findUnique({
+         where: { code: 'WFH' },
+         select: { id: true }
+      })
+      if (!findWfh) return res.status(409).json({ success: false, message: 'No WFH leave type found' })
+
+      const checkWfhAbility = await prisma.userLeave.findUnique({
+         where: {
+            userId_leaveTypeId: {
+               userId: +user.id,
+               leaveTypeId: +findWfh.id
+            }
+         }
+      })
+      if (!checkWfhAbility) return res.status(409).json({ success: false, message: 'User does not have WFH leave' })
+
+      // const transformedLeaves = body.wfhDates.flatMap();
+
+      const transaction = await prisma.$transaction(async (prisma) => {
+         // Create the leave application
+         const createWfh = await prisma.WorkFormHomeApplication.create({
+            data: {
+               userId: +user.id,
+               subject: body.subject,
+               reason: body.reason,
+               wfhDetails: {
+                  wfhCount: body.wfhCount,
+                  wfhDates: body.wfhDates,
+               }
+            }
+         });
+
+         // Create leaveApplicationCalender entries linked to the leave application
+         const createCalender = await prisma.WfhApplicationCalender.createMany({
+            data: body?.wfhDates?.map(leaveDate => ({
+               applicationId: createWfh.id,
+               leaveTypeId: +findWfh.id,
+               userId: +user.id,
+               leaveDate: leaveDate
+            }))
+         });
+
+         // update wfh details
+         const updateWfhCount = await prisma.userLeave.update({
+            where: {
+               userId_leaveTypeId: {
+                  userId: +user.id,
+                  leaveTypeId: +findWfh.id
+               }
+            },
+            data: {
+               pendingLeaves: {
+                  increment: parseInt(body?.wfhCount)
+               }
+            }
+         })
+
+         return { createWfh, createCalender }
+      });
+
+      if (transaction.createWfh) {
+         var mailOptions = {
+            from: {
+               name: 'WFH Application',
+               address: 'leave.reply@girlpowertalk.com'
+            },
+            to: [user?.email, 'leave@girlpowertalk.com'],
+            subject: body?.subject,
+            html: body?.reason
+         };
+         transporter.sendMail(mailOptions);
+      }
+
+      return res.status(201).json({ success: true, message: 'WFH was successfully created' })
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, message: 'Server error', error })
+   }
+})
+userLeaveRouter.get("/month-wfh-list", async (req, res) => {
+   try {
+      const year = 2025;
+      const month = 2;
+
+      const startDate = new Date(year, month - 1, 1); // First day of the month
+      const endDate = new Date(year, month, 1); // First day of the next month
+
+      const wfhApplications = await prisma.wfhApplicationCalender.findMany({
+         where: {
+            leaveDate: {
+               gte: startDate, // Greater than or equal to the first day of the month
+               lt: endDate,    // Less than the first day of the next month
+            },
+         },
+         include: {
+            user: {
+               select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  department: true
+               }
+            }
+         },
+         orderBy: {
+            leaveDate: "asc",
+         },
+      });
+
+      // Group data manually by date
+      const groupedData = wfhApplications?.reduce((acc, record) => {
+         const dateKey = record.leaveDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+         if (!acc[dateKey]) {
+            acc[dateKey] = [];
+         }
+         acc[dateKey].push({
+            applicationId: record.applicationId,
+            userId: record.user.id,
+            userName: record.user.firstName + ' ' + record.user.lastName,
+            userDepartment: record.user.department,
+            status: record.status
+         });
+         return acc;
+      }, {});
+
+      return res.status(200).json({ success: true, groupedData })
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, message: 'Error retrieving WFH applications', error })
+   }
+})
+
+
 export default userLeaveRouter
 
 
