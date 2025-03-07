@@ -17,10 +17,26 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
    try {
       const user = req.user
       const body = req.body
+      console.log(body)
 
-      const transformedLeaves = body.leaves.flatMap(({ leaveTypeId, dates }) =>
-         dates.map(d => ({ leaveDate: d, leaveTypeId, userId: +user.id }))
+      // const transformedLeaves = body.leaves.flatMap(({ leaveTypeId, dates }) =>
+      //    dates.map(d => ({ leaveDate: d, leaveTypeId, userId: +user.id }))
+      // );
+
+      const transformedLeaves = body.leaves?.flatMap(leave =>
+         leave.dates.map(date => ({
+            ...date,
+            leaveTypeId: leave.leaveTypeId,
+            userId: +user.id
+         }))
       );
+      let totalLeaveDays = 0;
+      // Create a new updated array
+      const updatedLeaveData = body.leaves?.map(leave => {
+         const totalValue = leave.dates.reduce((sum, day) => sum + day.value, 0);
+         totalLeaveDays += totalValue;
+         return { ...leave, totalValue };
+      });
 
       const transaction = await prisma.$transaction(async (prisma) => {
          // Create the leave application
@@ -30,10 +46,10 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
                subject: body.subject,
                reason: body.reason,
                leaveApplicationDetails: {
-                  create: body.leaves.map(leave => ({
+                  create: updatedLeaveData?.map(leave => ({
                      leaveType: { connect: { id: leave.leaveTypeId } },
-                     leaveCount: leave.leaveCount,
-                     leaveDates: leave.dates
+                     leaveCount: parseInt(leave.totalValue),
+                     leaveDates: leave
                   }))
                }
             }
@@ -41,16 +57,17 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
 
          // Create leaveApplicationCalender entries linked to the leave application
          const createCalender = await prisma.leaveApplicationCalender.createMany({
-            data: transformedLeaves.map(leave => ({
+            data: transformedLeaves?.map(leave => ({
                applicationId: createLeave.id,
                leaveTypeId: leave.leaveTypeId,
                userId: leave.userId,
-               leaveDate: leave.leaveDate
+               leaveDate: leave.date,
+               leaveMode: leave.type
             }))
          });
 
          await Promise.all(
-            body.leaves.map(leave =>
+            updatedLeaveData?.map(leave =>
                prisma.userLeave.update({
                   where: {
                      userId_leaveTypeId: {
@@ -60,13 +77,12 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
                   },
                   data: {
                      pendingLeaves: {
-                        increment: +leave.leaveCount
+                        increment: parseInt(leave.totalValue)
                      }
                   }
                })
             )
          );
-
          return { createLeave, createCalender }
       });
 
@@ -171,11 +187,12 @@ userLeaveRouter.get("/read-application/:id", async (req, res) => {
                include: {
                   leaveType: {
                      select: {
-                        name: true
+                        name: true,
+                        code: true
                      }
                   }
                }
-            },
+            }
          }
       })
       res.status(200).json({ success: true, application })
@@ -273,8 +290,9 @@ userLeaveRouter.post("/create-wfh", async (req, res) => {
 })
 userLeaveRouter.get("/month-wfh-list", async (req, res) => {
    try {
-      const year = 2025;
-      const month = 2;
+      const query = req.query
+      const year = new Date(query?.minDate).getFullYear()
+      const month = new Date(query?.minDate).getMonth() + 1;
 
       const startDate = new Date(year, month - 1, 1); // First day of the month
       const endDate = new Date(year, month, 1); // First day of the next month
@@ -326,6 +344,4 @@ userLeaveRouter.get("/month-wfh-list", async (req, res) => {
 
 
 export default userLeaveRouter
-
-
 

@@ -140,6 +140,7 @@ model LeaveApplication {
    updatedAt                DateTime                   @default(now()) @updatedAt
 
    @@unique([id, userId])
+   @@index([id, userId])
 }
 
 model LeaveApplicationDetails {
@@ -151,6 +152,9 @@ model LeaveApplicationDetails {
    leaveCount    Int
    leaveDates    Json
    createdAt     DateTime         @default(now())
+
+   @@unique([applicationId, leaveTypeId])
+   @@index([id, applicationId, leaveTypeId])
 }
 
 model LeaveApplicationCalender {
@@ -163,8 +167,12 @@ model LeaveApplicationCalender {
    application   LeaveApplication  @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
    status        ApplicationStatus @default(pending)
    leaveDate     DateTime
+   leaveMode     String
    createdAt     DateTime          @default(now())
    updatedAt     DateTime          @default(now()) @updatedAt
+
+   @@unique([applicationId, leaveDate])
+   @@index([id, applicationId, userId])
 }
 
 // /////////////////    Work Form Application   //////////////
