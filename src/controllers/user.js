@@ -51,10 +51,10 @@ userRouter.get("/profile", async (req, res) => {
       const user = await prisma.users.findUnique({
          where: { id: userId },
       })
-      res.status(200).json({ success: true, user })
+      return res.status(200).json({ success: true, user })
    } catch (error) {
       console.log(error)
-      res.status(500).json({ message: "Internal Server Error" })
+      return res.status(500).json({ message: "Internal Server Error" })
    }
 })
 userRouter.get("/profile-leaves-meta", async (req, res) => {
@@ -146,5 +146,22 @@ userRouter.get("/my-leaves", async (req, res) => {
    }
 })
 
+userRouter.get("/short-details", async (req, res) => {
+   try {
+      const userId = req.user.id
+      const user = await prisma.users.findUnique({
+         where: { id: +userId },
+         select: {
+            id: true,
+            designation: true,
+            department: true,
+         }
+      })
+      return res.status(200).json({ success: true, user })
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ message: "Internal Server Error" })
+   }
+})
 
 export default userRouter

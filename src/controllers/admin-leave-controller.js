@@ -50,7 +50,9 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
                      include: {
                         leaveType: {
                            select: {
-                              name: true
+                              id: true,
+                              name: true,
+                              code: true
                            }
                         }
                      }
@@ -61,7 +63,8 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
                include: {
                   leaveType: {
                      select: {
-                        name: true
+                        name: true,
+                        code: true
                      }
                   }
                }
@@ -132,18 +135,10 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
 })
 adminLeaveRouter.put("/update-application/:id", async (req, res) => {
    try {
-      const applicatioId = req.params.id
+      const applicationId = req.params.id
       const body = req.body
       const applicationDetails = await prisma.leaveApplication.findUnique({
-         where: { id: +applicatioId },
-         include: {
-            user: {
-               select: { email: true }
-            },
-            leaveApplicationDetails: {
-               select: { leaveTypeId: true, leaveCount: true }
-            }
-         }
+         where: { id: +applicationId },
       })
       if (!applicationDetails) {
          return res.status(409).json({ success: false, message: 'Application not found' })
@@ -151,67 +146,65 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
       if (!applicationDetails?.status === 'pending') {
          return res.status(409).json({ success: false, message: 'Application already processed' })
       }
-      if (!body?.status) {
-         return res.status(409).json({ success: false, message: 'Application status not found' })
-      }
+      const allLeaveList = body?.leaveApplicationDetails?.flatMap(app =>
+         app.leaveDates.dates.map(date => ({
+            ...date,
+            applicationId: app.applicationId
+         }))
+      );
+      const approvalRejectionCounts = body?.leaveApplicationDetails?.map(application => {
+         const { dates, totalValue, leaveTypeId } = application.leaveDates;
 
-      const transformedLeaves = body.leaves.reduce((acc, leave) => {
-         const addOrMergeLeave = (leaveTypeId, leaveCount) => {
-            if (leaveTypeId !== null) {
-               const existingLeave = acc.find(l => l.leaveTypeId === leaveTypeId);
-               if (existingLeave) {
-                  existingLeave.leaveCount += leaveCount;
-               } else {
-                  acc.push({ leaveTypeId, leaveCount });
-               }
+         // Calculate approved and rejected values
+         const approvedValue = dates
+            .filter(date => date.status === "approved")
+            .reduce((sum, date) => sum + date.value, 0);
+
+         const rejectedValue = dates
+            .filter(date => date.status === "rejected")
+            .reduce((sum, date) => sum + date.value, 0);
+
+         return {
+            ...application,
+            leaveDates: {
+               ...application.leaveDates,
+               totalValue,
+               approvedValue,
+               rejectedValue,
+               leaveTypeId,
             }
          };
+      });
 
-         addOrMergeLeave(leave.leaveTypeId, leave.leaveCount);
-         addOrMergeLeave(leave.modifyLeaveTypeId, leave.modifyLeaveCount);
-
-         return acc;
-      }, []);
-
-      if (body.status === 'approved') {
+      if (body?.approved) {
          const transaction = await prisma.$transaction(async (prisma) => {
             // update status
-            const updateLeave = await prisma.leaveApplication.update({
-               where: { id: +applicatioId },
+            const upadteStatus = await prisma.leaveApplication.update({
+               where: { id: +applicationId },
                data: {
-                  status: body.status
-               }
-            })
-            // update application calender
-            const updateCalender = await prisma.LeaveApplicationCalender.updateMany({
-               where: {
-                  applicationId: +applicatioId
-               },
-               data: {
-                  status: body.status
+                  comment: body?.hrComment,
+                  status: 'approved'
                }
             })
             //  upadte leave count
             await Promise.all([
                // Only run if transformedLeaves has data
-               ...(transformedLeaves?.length ? transformedLeaves.map(leave =>
-                  prisma.userLeave.update({
+               ...(allLeaveList?.length ? allLeaveList.map(leave =>
+                  prisma.LeaveApplicationCalender.update({
                      where: {
-                        userId_leaveTypeId: {
-                           userId: +applicationDetails?.userId,
-                           leaveTypeId: +leave.leaveTypeId
+                        applicationId_leaveDate: {
+                           applicationId: +leave?.applicationId,
+                           leaveDate: leave.date
                         }
                      },
                      data: {
-                        totalLeaves: {
-                           decrement: parseInt(leave.leaveCount)
-                        }
+                        status: leave?.status
                      }
                   })
                ) : []),
 
                // Only run if applicationDetails.userLeave has data
-               ...(applicationDetails?.leaveApplicationDetails?.length ? applicationDetails.leaveApplicationDetails.map(leave =>
+               ...(approvalRejectionCounts?.length ? approvalRejectionCounts?.map(leave =>
                   prisma.userLeave.update({
                      where: {
                         userId_leaveTypeId: {
@@ -221,48 +214,58 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      },
                      data: {
                         pendingLeaves: {
-                           decrement: parseInt(leave.leaveCount)
+                           decrement: (Number(leave.leaveDates.approvedValue) || 0) + (Number(leave.leaveDates.rejectedValue) || 0)
+                        },
+                        totalLeaves: {
+                           decrement: parseInt(leave.leaveDates.approvedValue)
                         }
                      }
                   })
                ) : [])
             ]);
-            return { updateLeave, updateCalender }
+            return { upadteStatus }
          })
-         if (transaction.updateLeave) {
+         if (transaction.upadteStatus) {
             var mailOptions = {
                from: {
                   name: 'Leave Application',
                   address: 'leave.reply@girlpowertalk.com'
                },
                to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
-               subject: body?.subject,
-               html: '<p>Approved leave</p>'
+               subject: "Leave Approved",
+               html: `<p>Approved leave</p><br/><p>${body?.hrComment}</p>`
             };
             transporter.sendMail(mailOptions);
          }
       } else {
          const transaction = await prisma.$transaction(async (prisma) => {
             // update status
-            const updateLeave = await prisma.leaveApplication.update({
-               where: { id: +applicatioId },
+            const upadteStatus = await prisma.leaveApplication.update({
+               where: { id: +applicationId },
                data: {
-                  status: body.status
+                  comment: body?.hrComment,
+                  status: 'rejected'
                }
             })
-            // update application calender
-            const updateCalender = await prisma.LeaveApplicationCalender.updateMany({
-               where: {
-                  applicationId: +applicatioId
-               },
-               data: {
-                  status: body.status
-               }
-            })
-            // update pending leaves
+            //  upadte leave count
             await Promise.all([
+               // Only run if transformedLeaves has data
+               ...(allLeaveList?.length ? allLeaveList.map(leave =>
+                  prisma.LeaveApplicationCalender.update({
+                     where: {
+                        applicationId_leaveDate: {
+                           applicationId: +leave?.applicationId,
+                           leaveDate: leave.date
+                        }
+                     },
+                     data: {
+                        status: 'rejected'
+                     }
+                  })
+               ) : []),
+
                // Only run if applicationDetails.userLeave has data
-               ...(applicationDetails?.leaveApplicationDetails?.length ? applicationDetails.leaveApplicationDetails.map(leave =>
+               ...(approvalRejectionCounts?.length ? approvalRejectionCounts?.map(leave =>
                   prisma.userLeave.update({
                      where: {
                         userId_leaveTypeId: {
@@ -272,34 +275,204 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      },
                      data: {
                         pendingLeaves: {
-                           decrement: parseInt(leave.leaveCount)
+                           decrement: parseInt(leave?.leaveDates?.totalValue)
                         }
                      }
                   })
                ) : [])
             ]);
-            return { updateLeave, updateCalender }
+            return { upadteStatus }
          })
-         if (transaction.updateLeave) {
+         if (transaction.upadteStatus) {
             var mailOptions = {
                from: {
                   name: 'Leave Application',
                   address: 'leave.reply@girlpowertalk.com'
                },
                to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
-               subject: body?.subject,
-               html: '<p>Rejected leave</p>'
+               subject: "Leave Rejected",
+               html: `<p>Rejected leave</p><br/><p>${body?.hrComment}</p>`
             };
             transporter.sendMail(mailOptions);
          }
       }
-      return res.status(200).json({ success: false, message: 'Nothing changes, server error' })
+
+      return res.status(200).json({ success: true, message: 'upadte' })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, message: 'Server error', error })
    }
 })
+
 export default adminLeaveRouter
 
 
+// adminLeaveRouter.put("/update-application/:id", async (req, res) => {
+//    try {
+//       const applicatioId = req.params.id
+//       const body = req.body
+//       const applicationDetails = await prisma.leaveApplication.findUnique({
+//          where: { id: +applicatioId },
+//          include: {
+//             user: {
+//                select: { email: true }
+//             },
+//             leaveApplicationDetails: {
+//                select: { leaveTypeId: true, leaveCount: true }
+//             }
+//          }
+//       })
+//       if (!applicationDetails) {
+//          return res.status(409).json({ success: false, message: 'Application not found' })
+//       }
+//       if (!applicationDetails?.status === 'pending') {
+//          return res.status(409).json({ success: false, message: 'Application already processed' })
+//       }
+//       if (!body?.status) {
+//          return res.status(409).json({ success: false, message: 'Application status not found' })
+//       }
 
+//       const transformedLeaves = body.leaves.reduce((acc, leave) => {
+//          const addOrMergeLeave = (leaveTypeId, leaveCount) => {
+//             if (leaveTypeId !== null) {
+//                const existingLeave = acc.find(l => l.leaveTypeId === leaveTypeId);
+//                if (existingLeave) {
+//                   existingLeave.leaveCount += leaveCount;
+//                } else {
+//                   acc.push({ leaveTypeId, leaveCount });
+//                }
+//             }
+//          };
+
+//          addOrMergeLeave(leave.leaveTypeId, leave.leaveCount);
+//          addOrMergeLeave(leave.modifyLeaveTypeId, leave.modifyLeaveCount);
+
+//          return acc;
+//       }, []);
+
+//       if (body.status === 'approved') {
+//          const transaction = await prisma.$transaction(async (prisma) => {
+//             // update status
+//             const updateLeave = await prisma.leaveApplication.update({
+//                where: { id: +applicatioId },
+//                data: {
+//                   status: body.status
+//                }
+//             })
+//             // update application calender
+//             const updateCalender = await prisma.LeaveApplicationCalender.updateMany({
+//                where: {
+//                   applicationId: +applicatioId
+//                },
+//                data: {
+//                   status: body.status
+//                }
+//             })
+//             //  upadte leave count
+//             await Promise.all([
+//                // Only run if transformedLeaves has data
+//                ...(transformedLeaves?.length ? transformedLeaves.map(leave =>
+//                   prisma.userLeave.update({
+//                      where: {
+//                         userId_leaveTypeId: {
+//                            userId: +applicationDetails?.userId,
+//                            leaveTypeId: +leave.leaveTypeId
+//                         }
+//                      },
+//                      data: {
+//                         totalLeaves: {
+//                            decrement: parseInt(leave.leaveCount)
+//                         }
+//                      }
+//                   })
+//                ) : []),
+
+//                // Only run if applicationDetails.userLeave has data
+//                ...(applicationDetails?.leaveApplicationDetails?.length ? applicationDetails.leaveApplicationDetails.map(leave =>
+//                   prisma.userLeave.update({
+//                      where: {
+//                         userId_leaveTypeId: {
+//                            userId: +applicationDetails?.userId,
+//                            leaveTypeId: +leave.leaveTypeId
+//                         }
+//                      },
+//                      data: {
+//                         pendingLeaves: {
+//                            decrement: parseInt(leave.leaveCount)
+//                         }
+//                      }
+//                   })
+//                ) : [])
+//             ]);
+//             return { updateLeave, updateCalender }
+//          })
+//          if (transaction.updateLeave) {
+//             var mailOptions = {
+//                from: {
+//                   name: 'Leave Application',
+//                   address: 'leave.reply@girlpowertalk.com'
+//                },
+//                to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
+//                subject: body?.subject,
+//                html: '<p>Approved leave</p>'
+//             };
+//             transporter.sendMail(mailOptions);
+//          }
+//       } else {
+//          const transaction = await prisma.$transaction(async (prisma) => {
+//             // update status
+//             const updateLeave = await prisma.leaveApplication.update({
+//                where: { id: +applicatioId },
+//                data: {
+//                   status: body.status
+//                }
+//             })
+//             // update application calender
+//             const updateCalender = await prisma.LeaveApplicationCalender.updateMany({
+//                where: {
+//                   applicationId: +applicatioId
+//                },
+//                data: {
+//                   status: body.status
+//                }
+//             })
+//             // update pending leaves
+//             await Promise.all([
+//                // Only run if applicationDetails.userLeave has data
+//                ...(applicationDetails?.leaveApplicationDetails?.length ? applicationDetails.leaveApplicationDetails.map(leave =>
+//                   prisma.userLeave.update({
+//                      where: {
+//                         userId_leaveTypeId: {
+//                            userId: +applicationDetails?.userId,
+//                            leaveTypeId: +leave.leaveTypeId
+//                         }
+//                      },
+//                      data: {
+//                         pendingLeaves: {
+//                            decrement: parseInt(leave.leaveCount)
+//                         }
+//                      }
+//                   })
+//                ) : [])
+//             ]);
+//             return { updateLeave, updateCalender }
+//          })
+//          if (transaction.updateLeave) {
+//             var mailOptions = {
+//                from: {
+//                   name: 'Leave Application',
+//                   address: 'leave.reply@girlpowertalk.com'
+//                },
+//                to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
+//                subject: body?.subject,
+//                html: '<p>Rejected leave</p>'
+//             };
+//             transporter.sendMail(mailOptions);
+//          }
+//       }
+//       return res.status(200).json({ success: false, message: 'Nothing changes, server error' })
+//    } catch (error) {
+//       console.log(error)
+//       return res.status(500).json({ success: false, message: 'Server error', error })
+//    }
+// })
