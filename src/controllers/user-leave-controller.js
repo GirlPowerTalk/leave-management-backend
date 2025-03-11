@@ -48,7 +48,7 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
                leaveApplicationDetails: {
                   create: updatedLeaveData?.map(leave => ({
                      leaveType: { connect: { id: leave.leaveTypeId } },
-                     leaveCount: parseInt(leave.totalValue),
+                     leaveCount: leave.totalValue,
                      leaveDates: leave
                   }))
                }
@@ -183,7 +183,17 @@ userLeaveRouter.get("/read-application/:id", async (req, res) => {
       const application = await prisma.leaveApplication.findUnique({
          where: { id: parseInt(req.params.id) },
          include: {
-            leaveApplicationDetails: {
+            // leaveApplicationDetails: {
+            //    include: {
+            //       leaveType: {
+            //          select: {
+            //             name: true,
+            //             code: true
+            //          }
+            //       }
+            //    }
+            // },
+            leaveApplicationCalender: {
                include: {
                   leaveType: {
                      select: {

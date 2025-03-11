@@ -123,5 +123,14 @@ authorizationRouter.get('/check-token', async (req, res) => {
       return res.status(500).send({ success: false, message: "Failed to authenticate token" })
    }
 })
-
+authorizationRouter.get("/logout", async (req, res) => {
+   try {
+      res.cookie('token', '', cookieParams());
+      return res.status(200).json({ success: true, message: "Logout successful" })
+      // return res.redirect(`${process.env.ALLOWED_ORIGIN}/login`)
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, error })
+   }
+})
 export default authorizationRouter

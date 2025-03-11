@@ -2,6 +2,7 @@ import { Router } from 'express'
 import nodemailer from 'nodemailer';
 import prisma from '../config/prisma.js';
 import { adminAuthentication } from '../middleware/index.js';
+import { updateAdminLeaveApplicationValidation } from '../validations/admin-leave.js';
 
 const transporter = nodemailer.createTransport({
    service: "Gmail",
@@ -63,6 +64,7 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
                include: {
                   leaveType: {
                      select: {
+                        id: true,
                         name: true,
                         code: true
                      }
@@ -133,8 +135,39 @@ adminLeaveRouter.get("/read-application/:id", async (req, res) => {
       return res.status(500).json({ message: "Failed to get leave applications" })
    }
 })
+adminLeaveRouter.get("/application-details/:id", async (req, res) => {
+   try {
+      const application = await prisma.leaveApplication.findUnique({
+         where: { id: parseInt(req.params.id) },
+         include: {
+            leaveApplicationCalender: {
+               include: {
+                  leaveType: {
+                     select: {
+                        name: true,
+                        code: true
+                     }
+                  }
+               }
+            }
+         }
+      })
+      res.status(200).json({ success: true, application })
+   } catch (error) {
+      console.log(error)
+      res.status(500).json({ success: false, message: 'Error retrieving application', error })
+   }
+})
 adminLeaveRouter.put("/update-application/:id", async (req, res) => {
    try {
+      const validation = updateAdminLeaveApplicationValidation.safeParse(req.body);
+      if (!validation.success) {
+         return res.status(400).json({
+            status: "error",
+            errors: validation.error.flatten().fieldErrors,
+         });
+      }
+      // return res.status(200).json({ success: true, message: 'upadte', body: req.body })
       const applicationId = req.params.id
       const body = req.body
       const applicationDetails = await prisma.leaveApplication.findUnique({
@@ -296,7 +329,6 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             transporter.sendMail(mailOptions);
          }
       }
-
       return res.status(200).json({ success: true, message: 'upadte' })
    } catch (error) {
       console.log(error)

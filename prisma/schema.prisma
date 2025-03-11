@@ -149,7 +149,7 @@ model LeaveApplicationDetails {
    application   LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
    leaveTypeId   Int
    leaveType     LeaveType        @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-   leaveCount    Int
+   leaveCount    Float
    leaveDates    Json
    createdAt     DateTime         @default(now())
 
