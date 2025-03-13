@@ -71,8 +71,8 @@ model UserLeave {
    user          Users      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
    leaveTypeId   Int?
    leaveType     LeaveType? @relation(fields: [leaveTypeId], references: [id])
-   totalLeaves   Int        @default(0)
-   pendingLeaves Int        @default(0)
+   totalLeaves   Float      @default(0)
+   pendingLeaves Float      @default(0)
    createdAt     DateTime   @default(now())
    updatedAt     DateTime   @default(now()) @updatedAt
 

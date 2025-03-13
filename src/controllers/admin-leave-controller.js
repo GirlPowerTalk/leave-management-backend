@@ -185,28 +185,70 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             applicationId: app.applicationId
          }))
       );
-      const approvalRejectionCounts = body?.leaveApplicationDetails?.map(application => {
-         const { dates, totalValue, leaveTypeId } = application.leaveDates;
+      // const approvalRejectionCounts = body?.leaveApplicationDetails?.map(application => {
+      //    const { dates, totalValue, leaveTypeId } = application.leaveDates;
 
-         // Calculate approved and rejected values
+      //    // Calculate approved and rejected values
+      //    const approvedValue = dates
+      //       .filter(date => date.status === "approved")
+      //       .reduce((sum, date) => sum + date.value, 0);
+
+      //    const rejectedValue = dates
+      //       .filter(date => date.status === "rejected")
+      //       .reduce((sum, date) => sum + date.value, 0);
+
+      //    return {
+      //       ...application,
+      //       leaveDates: {
+      //          ...application.leaveDates,
+      //          totalValue,
+      //          approvedValue,
+      //          rejectedValue,
+      //          leaveTypeId,
+      //       }
+      //    };
+      // });
+      const approvalRejectionCounts = body?.leaveApplicationDetails?.map(application => {
+         const { dates, totalValue } = application.leaveDates;
+         // Calculate approved values
          const approvedValue = dates
             .filter(date => date.status === "approved")
             .reduce((sum, date) => sum + date.value, 0);
-
+         // Calculate rejected values
          const rejectedValue = dates
             .filter(date => date.status === "rejected")
             .reduce((sum, date) => sum + date.value, 0);
 
          return {
-            ...application,
-            leaveDates: {
-               ...application.leaveDates,
-               totalValue,
-               approvedValue,
-               rejectedValue,
-               leaveTypeId,
-            }
-         };
+            leaveType: application?.leaveType,
+            approvedValue,
+            rejectedValue,
+            totalValue
+         }
+      });
+      body?.modify.forEach(mod => {
+         const { modifyDays, modifyLeaveType, leaveType, leaveDays } = mod;
+
+         // Step 1: Reduce approvedValue from existing leaveType
+         const existingLeave = approvalRejectionCounts.find(item => item.leaveType.id === leaveType.id);
+         if (existingLeave) {
+            existingLeave.approvedValue = Math.max(existingLeave.approvedValue - leaveDays, 0);
+            existingLeave.totalValue = existingLeave.approvedValue + existingLeave.rejectedValue;
+         }
+
+         // Step 2: Add or update modifyLeaveType
+         const modifyExisting = approvalRejectionCounts.find(item => item.leaveType.id === modifyLeaveType.id);
+         if (modifyExisting) {
+            modifyExisting.approvedValue += modifyDays;
+            modifyExisting.totalValue = modifyExisting.approvedValue + modifyExisting.rejectedValue;
+         } else {
+            approvalRejectionCounts.push({
+               leaveType: modifyLeaveType,
+               approvedValue: modifyDays,
+               rejectedValue: 0,
+               totalValue: 0
+            });
+         }
       });
 
       if (body?.approved) {
@@ -329,7 +371,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             transporter.sendMail(mailOptions);
          }
       }
-      return res.status(200).json({ success: true, message: 'upadte' })
+      return res.status(200).json({ success: true, upadte: approvalRejectionCounts, body, message: 'upadte', })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, message: 'Server error', error })
@@ -508,3 +550,66 @@ export default adminLeaveRouter
 //       return res.status(500).json({ success: false, message: 'Server error', error })
 //    }
 // })
+
+// const newApprovalRejectionCounts = [
+//    {
+//       "leaveType": {
+//          "id": 1,
+//          "name": "Earned Leaves",
+//          "code": "EL"
+//       },
+//       "approvedValue": 4,
+//       "rejectedValue": 0,
+//       "totalValue": 4
+//    },
+//    {
+//       "leaveType": {
+//          "id": 5,
+//          "name": "Work From Home",
+//          "code": "WFH"
+//       },
+//       "approvedValue": 4,
+//       "rejectedValue": 0,
+//       "totalValue": 4
+//    },
+//    {
+//       "leaveType": {
+//          "id": 4,
+//          "name": "Festive Leave",
+//          "code": "FL"
+//       },
+//       "approvedValue": 3,
+//       "rejectedValue": 0,
+//       "totalValue": 3
+//    }
+// ]
+// const modification = [
+//    {
+//       "modifyDays": 1,
+//       "modifyLeaveType": {
+//          "id": 2,
+//          "name": "Casual Leave",
+//          "code": "CL"
+//       },
+//       "leaveType": {
+//          "id": 5,
+//          "name": "Work From Home",
+//          "code": "WFH"
+//       },
+//       "leaveDays": 2
+//    }
+// ]
+
+// first check newApprovalRejectionCounts array item is existing on modification. if existing update approvedValue like approvedValue minus leaveDays.
+// after check modifyLeaveType is esixting on newApprovalRejectionCounts update approvedValue like approvedValue plus modifyDays, if not existing modifyLeaveType added new item on newApprovalRejectionCounts like
+// {
+//    "leaveType": {
+//       "id": 4,
+//       "name": "Festive Leave",
+//       "code": "FL"
+//    },
+//    "approvedValue": 3,
+//    "rejectedValue": 0,
+//    "totalValue": 3
+// }
+// approvedValue is modifyDays, rejectedValue value is zero and totalValue is modifyDays
