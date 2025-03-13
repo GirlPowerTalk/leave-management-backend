@@ -284,15 +284,15 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      where: {
                         userId_leaveTypeId: {
                            userId: +applicationDetails?.userId,
-                           leaveTypeId: +leave.leaveTypeId
+                           leaveTypeId: +leave.leaveType.id
                         }
                      },
                      data: {
                         pendingLeaves: {
-                           decrement: (Number(leave.leaveDates.approvedValue) || 0) + (Number(leave.leaveDates.rejectedValue) || 0)
+                           decrement: (Number(leave?.approvedValue) || 0) + (Number(leave?.rejectedValue) || 0)
                         },
                         totalLeaves: {
-                           decrement: parseInt(leave.leaveDates.approvedValue)
+                           decrement: parseInt(leave?.approvedValue)
                         }
                      }
                   })
@@ -345,12 +345,12 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      where: {
                         userId_leaveTypeId: {
                            userId: +applicationDetails?.userId,
-                           leaveTypeId: +leave.leaveTypeId
+                           leaveTypeId: +leave.leaveType.id
                         }
                      },
                      data: {
                         pendingLeaves: {
-                           decrement: parseInt(leave?.leaveDates?.totalValue)
+                           decrement: parseInt(leave?.totalValue)
                         }
                      }
                   })
@@ -371,7 +371,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             transporter.sendMail(mailOptions);
          }
       }
-      return res.status(200).json({ success: true, upadte: approvalRejectionCounts, body, message: 'upadte', })
+      return res.status(200).json({ success: true, upadte: approvalRejectionCounts, body,allLeaveList, message: 'upadte', })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, message: 'Server error', error })
