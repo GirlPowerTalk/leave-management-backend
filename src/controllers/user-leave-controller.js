@@ -170,6 +170,9 @@ userLeaveRouter.get("/applications", async (req, res) => {
                   },
                }
             },
+         },
+         orderBy: {
+            createdAt: 'desc',
          }
       })
       res.status(200).json({ success: true, applications })
