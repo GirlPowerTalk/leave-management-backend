@@ -1,23 +1,33 @@
 import { Router } from 'express'
-import nodemailer from 'nodemailer';
 import prisma from '../config/prisma.js';
 import { adminAuthentication } from '../middleware/index.js';
 import { updateAdminLeaveApplicationValidation } from '../validations/admin-leave.js';
+import { ApprovedTemplateForEmployee, RejectedTemplateForEmployee } from '../lib/mail-template.js';
 
-const transporter = nodemailer.createTransport({
-   service: "Gmail",
-   auth: {
-      user: process.env.CENTRAL_EMAIL_ADDRESS,
-      pass: process.env.CENTRAL_EMAIL_PASSWORD,
-   },
-});
 
 const adminLeaveRouter = Router();
 adminLeaveRouter.use(adminAuthentication())
 
 adminLeaveRouter.get("/applications", async (req, res) => {
    try {
+      const { search, column = 'createdAt', status = "all", sortOrder = 'desc', page = 1, limit = 15 } = req.query
+      const conditions = {}
+      if (search) {
+         conditions.OR = [
+            { email: { contains: search, mode: "insensitive" } },
+            { firstName: { contains: search, mode: "insensitive" } },
+            { lastName: { contains: search, mode: "insensitive" } },
+         ]
+      }
+      if (status !== 'all') {
+         conditions.status = status
+      }
+      const query = {};
+      if (column && sortOrder) {
+         query.orderBy = { [column]: sortOrder }
+      }
       const applications = await prisma.leaveApplication.findMany({
+         where: conditions,
          include: {
             user: true,
             leaveApplicationDetails: {
@@ -26,12 +36,20 @@ adminLeaveRouter.get("/applications", async (req, res) => {
                }
             }
          },
-         orderBy: {
-            createdAt: "desc"
-         }
+         take: +limit,
+         skip: (+page - 1) * +limit,
+         ...query
       })
-      const total = await prisma.leaveApplication.count()
-      return res.status(200).json({ success: true, applications, total })
+      const total = await prisma.leaveApplication.count({
+         where: conditions
+      })
+      const groupedByStatus = await prisma.leaveApplication.groupBy({
+         by: ['status'],
+         _count: {
+            _all: true,
+         },
+      })
+      return res.status(200).json({ success: true, applications, total, groupedByStatus })
    } catch (error) {
       console.error(error)
       return res.status(500).json({ message: "Failed to get leave applications" })
@@ -172,6 +190,26 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
       const body = req.body
       const applicationDetails = await prisma.leaveApplication.findUnique({
          where: { id: +applicationId },
+         include: {
+            user: {
+               select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+               }
+            },
+            leaveApplicationDetails: {
+               include: {
+                  leaveType: {
+                     select: {
+                        id: true,
+                        name: true,
+                        code: true
+                     }
+                  }
+               }
+            }
+         }
       })
       if (!applicationDetails) {
          return res.status(409).json({ success: false, message: 'Application not found' })
@@ -292,7 +330,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                            decrement: (Number(leave?.approvedValue) || 0) + (Number(leave?.rejectedValue) || 0)
                         },
                         totalLeaves: {
-                           decrement: parseInt(leave?.approvedValue)
+                           decrement: Number(leave?.approvedValue)
                         }
                      }
                   })
@@ -301,16 +339,14 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             return { upadteStatus }
          })
          if (transaction.upadteStatus) {
-            var mailOptions = {
-               from: {
-                  name: 'Leave Application',
-                  address: 'leave.reply@girlpowertalk.com'
-               },
-               to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
-               subject: "Leave Approved",
-               html: `<p>Approved leave</p><br/><p>${body?.hrComment}</p>`
-            };
-            transporter.sendMail(mailOptions);
+            ApprovedTemplateForEmployee({
+               applicationId,
+               employeeEmail: applicationDetails?.user?.email,
+               employeeName: applicationDetails?.user?.firstName + ' ' + applicationDetails?.user?.lastName,
+               subject: applicationDetails?.subject,
+               reason: applicationDetails?.reason,
+               leaves: applicationDetails?.leaveApplicationDetails
+            })
          }
       } else {
          const transaction = await prisma.$transaction(async (prisma) => {
@@ -350,7 +386,7 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
                      },
                      data: {
                         pendingLeaves: {
-                           decrement: parseInt(leave?.totalValue)
+                           decrement: Number(leave?.totalValue)
                         }
                      }
                   })
@@ -359,19 +395,16 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             return { upadteStatus }
          })
          if (transaction.upadteStatus) {
-            var mailOptions = {
-               from: {
-                  name: 'Leave Application',
-                  address: 'leave.reply@girlpowertalk.com'
-               },
-               to: [applicationDetails?.user?.email, 'leave@girlpowertalk.com'],
-               subject: "Leave Rejected",
-               html: `<p>Rejected leave</p><br/><p>${body?.hrComment}</p>`
-            };
-            transporter.sendMail(mailOptions);
+            RejectedTemplateForEmployee({
+               applicationId,
+               employeeEmail: applicationDetails?.user?.email,
+               employeeName: applicationDetails?.user?.firstName + ' ' + applicationDetails?.user?.lastName,
+               rejectionReason: body?.hrComment,
+               leaves: applicationDetails?.leaveApplicationDetails
+            })
          }
       }
-      return res.status(200).json({ success: true, upadte: approvalRejectionCounts, body,allLeaveList, message: 'upadte', })
+      return res.status(200).json({ success: true, message: 'upadte', applicationDetails })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, message: 'Server error', error })

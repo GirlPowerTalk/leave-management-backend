@@ -2,6 +2,7 @@ import { Router } from 'express'
 import nodemailer from 'nodemailer';
 import prisma from '../config/prisma.js';
 import { userAuthentication } from '../middleware/index.js';
+import { RequestTemplateForEmployee, RequestTemplateForHr } from '../lib/mail-template.js';
 
 const transporter = nodemailer.createTransport({
    service: "Gmail",
@@ -17,7 +18,8 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
    try {
       const user = req.user
       const body = req.body
-      console.log(body)
+      // console.log(user)
+      // console.log(body)
 
       // const transformedLeaves = body.leaves.flatMap(({ leaveTypeId, dates }) =>
       //    dates.map(d => ({ leaveDate: d, leaveTypeId, userId: +user.id }))
@@ -77,7 +79,7 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
                   },
                   data: {
                      pendingLeaves: {
-                        increment: parseInt(leave.totalValue)
+                        increment: parseFloat(leave.totalValue)
                      }
                   }
                })
@@ -86,17 +88,18 @@ userLeaveRouter.post('/create-leave', async (req, res) => {
          return { createLeave, createCalender }
       });
 
-      if (transaction.createLeave) {
-         var mailOptions = {
-            from: {
-               name: 'Leave Application',
-               address: 'leave.reply@girlpowertalk.com'
-            },
-            to: [user?.email, 'leave@girlpowertalk.com'],
-            subject: body?.subject,
-            html: body?.reason
-         };
-         transporter.sendMail(mailOptions);
+      if (transaction?.createLeave) {
+         RequestTemplateForHr({
+            applicationId: transaction?.createLeave?.id,
+            employeeName: user?.fullName,
+            ...body
+         })
+         RequestTemplateForEmployee({
+            applicationId: transaction?.createLeave?.id,
+            employeeEmail: user?.email,
+            employeeName: user?.fullName,
+            ...body
+         })
       }
 
       return res.status(201).json({ success: true, message: 'Leave was successfully created' })
