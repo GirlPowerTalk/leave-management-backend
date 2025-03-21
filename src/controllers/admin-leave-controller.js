@@ -404,7 +404,54 @@ adminLeaveRouter.put("/update-application/:id", async (req, res) => {
             })
          }
       }
-      return res.status(200).json({ success: true, message: 'upadte', applicationDetails })
+      return res.status(200).json({ success: true, message: 'upadte' })
+   } catch (error) {
+      console.log(error)
+      return res.status(500).json({ success: false, message: 'Server error', error })
+   }
+})
+
+adminLeaveRouter.get("/all-employee-applications", async (req, res) => {
+   try {
+      const applications = await prisma.users.findMany({
+         select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            department: true,
+            designation: true,
+            // leaveApplication: {
+            //    select: {
+            //       id: true,
+            //       status: true,
+            //       leaveApplicationDetails: {
+            //          select: { leaveTypeId: true, leaveCount: true }
+            //       }
+            //    },
+            //    orderBy: {
+            //       createdAt: 'desc'
+            //    }
+            // }
+            leaveApplicationCalender: {
+               select: {
+                  leaveDate: true,
+                  status: true,
+                  leaveType: {
+                     select: {
+                        id: true,
+                        name: true,
+                        code: true
+                     }
+                  }
+               },
+               orderBy: {
+                  leaveDate: 'desc'
+               }
+            }
+         }
+      })
+      return res.status(200).json({ success: true, message: 'all employee', applications })
    } catch (error) {
       console.log(error)
       return res.status(500).json({ success: false, message: 'Server error', error })

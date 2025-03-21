@@ -4,9 +4,9 @@ import { z } from 'zod'
 const leaveDateSchema = z.object({
    date: z.string({ required_error: "Date is required" })
       .datetime({ message: "Invalid date format" }),
-   type: z.enum(['fullday', 'halfday'], {
+   type: z.enum(['fullday', '1sthalf', '2ndhalf'], {
       required_error: "Type is required",
-      message: "Type must be either 'fullday' or 'halfday'"
+      message: "Type must be either 'fullday' or '1sthalf' or '2ndhalf'"
    }),
    value: z.number({
       required_error: "Value is required"

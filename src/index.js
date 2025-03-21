@@ -15,6 +15,8 @@ import adminLeaveRouter from "./controllers/admin-leave-controller.js"
 import { redis } from "./config/redis.js"
 import holidayRouter from "./controllers/holiday-controller.js"
 import adminUserRouter from "./controllers/admin-user-coltroller.js"
+import adminDepartmentRouter from "./controllers/admin/department-controller.js"
+import adminDesignationRouter from "./controllers/admin/designation-controller.js"
 
 const app = express()
 dotenv.config()
@@ -52,7 +54,11 @@ app.use('/api/auth', authorizationRouter)
 app.use('/api/admin/employees', adminUserRouter)
 app.use('/api/admin/leave-format', leaveFormatRouter)
 app.use('/api/admin/leave-type', leaveTypeRouter)
-//
+// department
+app.use("/api/admin/department", adminDepartmentRouter)
+//designation
+app.use("/api/admin/designation", adminDesignationRouter)
+
 // app.use("/api/user/leave-application", leaveApplicationRouter)
 app.use("/api/employee/leave-application", userLeaveRouter)
 app.use("/api/admin/leave-application", adminLeaveRouter)

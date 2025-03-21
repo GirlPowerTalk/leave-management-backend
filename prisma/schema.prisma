@@ -22,14 +22,17 @@ model Users {
    role                     UserRole                   @default(employee)
    employeeType             UserType                   @default(permanent)
    isActive                 Boolean                    @default(true)
-   designation              String?
-   department               String?
    picture                  String?
    reportingHrId            Int?
    reportingHr              Users?                     @relation("hrRelation", fields: [reportingHrId], references: [id])
    employees                Users[]                    @relation("hrRelation")
    formatId                 Int?
    format                   LeaveFormat?               @relation(fields: [formatId], references: [id])
+   departmentId             Int?
+   department               Department?                @relation(fields: [departmentId], references: [id])
+   designationId            Int?
+   designation              Designation?               @relation(fields: [designationId], references: [id])
+   leadingDepartment        Department?                @relation("DepartmentLeader")
    userLeave                UserLeave[]
    leaveApplication         LeaveApplication[]
    leaveApplicationCalender LeaveApplicationCalender[]
@@ -77,6 +80,37 @@ model UserLeave {
    updatedAt     DateTime   @default(now()) @updatedAt
 
    @@unique([userId, leaveTypeId])
+}
+
+// //////// Department & Designation //////////////////
+model Department {
+   id          Int           @id @default(autoincrement())
+   name        String        @unique
+   code        String        @unique
+   description String?
+   status      AccessStatus  @default(active)
+   parentId    Int?
+   parent      Department?   @relation("DepartmentToDepartment", fields: [parentId], references: [id])
+   children    Department[]  @relation("DepartmentToDepartment")
+   leaderId    Int?          @unique
+   leader      Users?        @relation("DepartmentLeader", fields: [leaderId], references: [id])
+   users       Users[]
+   designation Designation[]
+   createdAt   DateTime      @default(now())
+   updatedAt   DateTime      @default(now()) @updatedAt
+}
+
+model Designation {
+   id           Int          @id @default(autoincrement())
+   name         String       @unique
+   code         String       @unique
+   description  String?
+   status       AccessStatus @default(active)
+   department   Department?  @relation(fields: [departmentId], references: [id])
+   departmentId Int?
+   users        Users[]
+   createdAt    DateTime     @default(now())
+   updatedAt    DateTime     @default(now()) @updatedAt
 }
 
 //////////////////////   Leave //////////////////
@@ -235,6 +269,12 @@ enum ApplicationStatus {
    approved
    rejected
    cancelled
+}
+
+enum AccessStatus {
+   pending
+   active
+   inactive
 }
 
 enum LeaveFor {
