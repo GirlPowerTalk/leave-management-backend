@@ -45,11 +45,17 @@ adminDepartmentRouter.put("/update-department/:id", async (req, res) => {
          leaderId: req.body.leaderId ? Number(req.body.leaderId) : null,
       });
       const checkDepartmentName = await prisma.department.findUnique({
-         where: { name: validatedData?.name }
+         where: {
+            name: validatedData?.name,
+            NOT: { id: departmentId }
+         }
       })
       if (checkDepartmentName) return res.status(409).json({ success: false, message: 'Department name already exists' })
       const checkDepartmentCode = await prisma.department.findUnique({
-         where: { code: validatedData?.code }
+         where: {
+            code: validatedData?.code,
+            NOT: { id: departmentId }
+         }
       })
       if (checkDepartmentCode) return res.status(409).json({ success: false, message: 'Department code already exists' })
       const updatedDepartment = await prisma.department.update({
@@ -94,7 +100,25 @@ adminDepartmentRouter.get("/read-department/:id", async (req, res) => {
 })
 adminDepartmentRouter.get("/departments", async (req, res) => {
    try {
+      const { page = 1, limit = 15, orderBy = 'desc', orderColumn = 'createdAt', search = '' } = req.query
+      const conditions = {}
+      if (search) {
+         conditions.OR = [
+            { name: { contains: search, mode: "insensitive" } },
+            { code: { contains: search, mode: "insensitive" } }
+         ]
+      }
+      const queries = {}
+      if (page && limit) {
+         queries.skip = (parseInt(page) - 1) * parseInt(limit);
+         queries.take = parseInt(limit);
+      }
+      if (orderBy && orderColumn) {
+         queries.orderBy = { [orderColumn]: orderBy }
+      }
       const departments = await prisma.department.findMany({
+         where: conditions,
+         ...queries,
          include: {
             leader: {
                select: {
@@ -111,7 +135,9 @@ adminDepartmentRouter.get("/departments", async (req, res) => {
             },
          }
       })
-      const total = await prisma.department.count()
+      const total = await prisma.department.count({
+         where: conditions,
+      })
       return res.status(200).json({ success: true, message: 'Departments retrieved successfully', departments, total })
    } catch (error) {
       console.error(error)
